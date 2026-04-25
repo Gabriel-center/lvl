@@ -1,0 +1,1070 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no, maximum-scale=1.0">
+<meta name="theme-color" content="#0a0a0c">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>PLUMB · Spirit Level</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@200;300;400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:        #0a0a0c;
+  --bg-2:      #131316;
+  --fg:        #f5f5f4;
+  --fg-dim:    #71717a;
+  --fg-faint:  #3f3f46;
+  --line:      #27272a;
+  --good:      #a3e635;
+  --good-glow: rgba(163,230,53,.45);
+  --bad:       #fb7185;
+  --bad-glow:  rgba(251,113,133,.45);
+  --accent:    #fbbf24;
+}
+
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+
+html,body{
+  height:100%;
+  width:100%;
+  overflow:hidden;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-feature-settings: 'tnum' 1, 'zero' 1;
+  -webkit-user-select:none;
+  user-select:none;
+  -webkit-touch-callout:none;
+  overscroll-behavior:none;
+  touch-action: none;
+}
+
+body{
+  position:fixed;
+  inset:0;
+  background-image:
+    radial-gradient(circle at 50% 0%, rgba(163,230,53,.035), transparent 55%),
+    repeating-linear-gradient(0deg, transparent 0, transparent 39px, rgba(255,255,255,.012) 39px, rgba(255,255,255,.012) 40px),
+    repeating-linear-gradient(90deg, transparent 0, transparent 39px, rgba(255,255,255,.012) 39px, rgba(255,255,255,.012) 40px);
+}
+
+.app{
+  position:relative;
+  width:100%;
+  height:100%;
+  display:flex;
+  flex-direction:column;
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* ─── Header ──────────────────────────────────────────────── */
+.header{
+  flex: 0 0 auto;
+  height: 48px;
+  padding: 0 18px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  border-bottom: 1px solid var(--line);
+  font-size: 10px;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: var(--fg-dim);
+  background: rgba(10,10,12,.6);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  z-index: 10;
+}
+
+.brand{
+  font-weight: 700;
+  letter-spacing: .32em;
+  color: var(--fg);
+  display:flex;
+  align-items:center;
+  gap: 9px;
+  font-size: 11px;
+}
+.brand::before{
+  content:'';
+  width:7px;height:7px;
+  background: var(--fg-faint);
+  border-radius:50%;
+  transition: background .3s, box-shadow .3s;
+}
+.brand.live::before{
+  background: var(--good);
+  box-shadow: 0 0 10px var(--good-glow);
+  animation: brandPulse 2.4s ease-in-out infinite;
+}
+@keyframes brandPulse{
+  0%,100%{ box-shadow: 0 0 6px var(--good-glow); }
+  50%   { box-shadow: 0 0 14px var(--good-glow); }
+}
+
+.mode-pill{
+  border:1px solid var(--line);
+  padding: 5px 11px;
+  display:flex;
+  gap: 8px;
+  align-items:center;
+  background: var(--bg-2);
+  font-size: 9.5px;
+  letter-spacing: .22em;
+}
+.mode-pill .dot{
+  width:5px;height:5px;
+  background: var(--accent);
+  border-radius:50%;
+  transition: background .25s;
+}
+.mode-pill.flat   .dot{ background: var(--good);   }
+.mode-pill.vert   .dot{ background: var(--accent); }
+
+.status{ display:flex; gap: 14px; }
+.status-item{
+  font-size: 9.5px;
+  display:flex;
+  align-items:center;
+  gap:6px;
+}
+.status-item::before{
+  content:'';
+  width:5px;height:5px;
+  background: var(--fg-faint);
+  border-radius:50%;
+  transition: background .3s, box-shadow .3s;
+}
+.status-item.on::before{
+  background: var(--good);
+  box-shadow: 0 0 8px var(--good-glow);
+}
+
+/* ─── Main viewport ───────────────────────────────────────── */
+.main{
+  flex:1;
+  position:relative;
+  overflow:hidden;
+}
+
+.mode-panel{
+  position:absolute;
+  inset:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  opacity:0;
+  pointer-events:none;
+  transition: opacity .3s ease;
+}
+.mode-panel.active{ opacity:1; pointer-events:auto; }
+
+/* ─── Bubble (flat) mode ──────────────────────────────────── */
+.bubble-wrap{
+  width: min(78vw, 60vh);
+  aspect-ratio: 1;
+  position: relative;
+}
+
+.bubble-svg{
+  width:100%;
+  height:100%;
+  overflow:visible;
+}
+
+.b-readout{
+  position:absolute;
+  top: -14%;
+  left:50%;
+  transform: translateX(-50%);
+  text-align:center;
+  pointer-events:none;
+  white-space:nowrap;
+}
+.b-readout .num{
+  font-size: clamp(40px, 9vw, 64px);
+  font-weight: 200;
+  letter-spacing: -.02em;
+  line-height:1;
+  color: var(--fg);
+  transition: color .25s;
+  font-variant-numeric: tabular-nums;
+}
+.b-readout .num.level{ color: var(--good); }
+.b-readout .label{
+  margin-top: 8px;
+  font-size: 9.5px;
+  letter-spacing: .3em;
+  color: var(--fg-dim);
+  text-transform: uppercase;
+}
+
+.b-coords{
+  position:absolute;
+  bottom: -12%;
+  left:50%;
+  transform: translateX(-50%);
+  display:flex;
+  gap: 28px;
+  font-size: 11px;
+  color: var(--fg-dim);
+  letter-spacing: .15em;
+  white-space:nowrap;
+}
+.b-coords span b{
+  color: var(--fg);
+  font-weight: 400;
+  margin-left: 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+#bubble{ transition: transform .04s linear; }
+#bubble-halo{ transition: fill .25s; }
+#bubble-ring{ transition: stroke .25s; }
+#bubble-core{ transition: fill .25s; }
+
+.bubble-level #bubble-halo{ fill: rgba(163,230,53,.10); }
+.bubble-level #bubble-ring{ stroke: var(--good); filter: drop-shadow(0 0 6px var(--good-glow)); }
+.bubble-level #bubble-core{ fill: var(--good); }
+
+/* ─── Camera (vertical) mode ──────────────────────────────── */
+.cam-stage{
+  position:absolute;
+  inset:0;
+  background: #000;
+  overflow:hidden;
+}
+#cam-video{
+  position:absolute;
+  inset:0;
+  width:100%;height:100%;
+  object-fit:cover;
+  opacity: 0;
+  transition: opacity .35s;
+}
+#cam-video.on{ opacity: 1; }
+
+.cam-overlay{
+  position:absolute;
+  inset:0;
+  pointer-events:none;
+}
+
+/* fixed reference cross — stays centered, represents phone's frame */
+.ref-cross::before, .ref-cross::after{
+  content:'';
+  position:absolute;
+  background: var(--good);
+  box-shadow: 0 0 6px var(--good-glow);
+  opacity: .85;
+}
+.ref-cross::before{
+  left:0; right:0;
+  top:50%;
+  height: 1px;
+  transform: translateY(-50%);
+}
+.ref-cross::after{
+  top:0; bottom:0;
+  left:50%;
+  width: 1px;
+  transform: translateX(-50%);
+}
+
+/* true level cross — rotates with gravity */
+.true-cross{
+  position:absolute;
+  width: 200%;
+  height: 200%;
+  left: -50%;
+  top: -50%;
+  transform: rotate(var(--roll, 0deg));
+  transition: transform .04s linear;
+}
+.true-cross::before, .true-cross::after{
+  content:'';
+  position:absolute;
+  background: var(--bad);
+  box-shadow: 0 0 6px var(--bad-glow);
+  transition: background .25s, box-shadow .25s;
+}
+.true-cross::before{
+  left:0; right:0;
+  top:50%;
+  height: 1px;
+}
+.true-cross::after{
+  top:0; bottom:0;
+  left:50%;
+  width: 1px;
+}
+.true-cross.aligned::before,
+.true-cross.aligned::after{
+  background: var(--good);
+  box-shadow: 0 0 10px var(--good-glow);
+}
+
+/* center mark for camera mode */
+.cam-center{
+  position:absolute;
+  left:50%; top:50%;
+  width: 22px; height: 22px;
+  transform: translate(-50%,-50%);
+  border: 1px solid rgba(245,245,244,.4);
+  border-radius: 50%;
+  pointer-events:none;
+}
+
+.cam-readout{
+  position:absolute;
+  bottom: 22px;
+  left: 50%;
+  transform: translateX(-50%);
+  text-align:center;
+  background: rgba(10,10,12,.55);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid var(--line);
+  padding: 10px 22px;
+  pointer-events:none;
+}
+.cam-readout .num{
+  font-size: 32px;
+  font-weight: 200;
+  line-height:1;
+  letter-spacing: -.02em;
+  font-variant-numeric: tabular-nums;
+  transition: color .25s;
+}
+.cam-readout .num.level{ color: var(--good); }
+.cam-readout .label{
+  margin-top: 5px;
+  font-size: 9.5px;
+  letter-spacing: .28em;
+  color: var(--fg-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.cam-corner{
+  position:absolute;
+  width: 18px;
+  height: 18px;
+  border-color: rgba(245,245,244,.5);
+  border-style: solid;
+  border-width: 0;
+}
+.cam-corner.tl{ top:14px; left:14px; border-top-width:1px; border-left-width:1px; }
+.cam-corner.tr{ top:14px; right:14px; border-top-width:1px; border-right-width:1px; }
+.cam-corner.bl{ bottom:14px; left:14px; border-bottom-width:1px; border-left-width:1px; }
+.cam-corner.br{ bottom:14px; right:14px; border-bottom-width:1px; border-right-width:1px; }
+
+/* ─── Footer ──────────────────────────────────────────────── */
+.footer{
+  flex: 0 0 auto;
+  border-top: 1px solid var(--line);
+  display:flex;
+  height: 64px;
+  background: rgba(10,10,12,.7);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  z-index: 10;
+}
+.btn{
+  flex:1;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap: 5px;
+  background: transparent;
+  border: none;
+  border-right: 1px solid var(--line);
+  color: var(--fg-dim);
+  font-family: inherit;
+  font-size: 9.5px;
+  font-weight: 500;
+  letter-spacing: .25em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background .15s, color .15s, opacity .25s;
+  position:relative;
+}
+.btn:last-child{ border-right: none; }
+.btn:active{ background: rgba(255,255,255,.04); color: var(--fg); }
+.btn .icon{
+  width: 20px; height: 20px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.btn.primed{ color: var(--fg); }
+.btn.primed .icon{ filter: drop-shadow(0 0 4px rgba(245,245,244,.4)); }
+.btn.toggle.on{ color: var(--good); }
+.btn.toggle.on .icon{ filter: drop-shadow(0 0 5px var(--good-glow)); }
+.btn.dim{ opacity: .35; }
+
+/* ─── Permission gate ─────────────────────────────────────── */
+.gate{
+  position:absolute;
+  inset:0;
+  background: var(--bg);
+  background-image:
+    radial-gradient(circle at 50% 30%, rgba(163,230,53,.06), transparent 50%),
+    repeating-linear-gradient(0deg, transparent 0, transparent 39px, rgba(255,255,255,.012) 39px, rgba(255,255,255,.012) 40px),
+    repeating-linear-gradient(90deg, transparent 0, transparent 39px, rgba(255,255,255,.012) 39px, rgba(255,255,255,.012) 40px);
+  z-index: 100;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  padding: 32px;
+  text-align:center;
+  transition: opacity .4s, visibility .4s;
+}
+.gate.hidden{
+  opacity: 0;
+  visibility: hidden;
+  pointer-events:none;
+}
+
+.gate-mark{
+  width: 88px;height:88px;
+  border:1px solid var(--line);
+  border-radius:50%;
+  margin-bottom: 28px;
+  position:relative;
+}
+.gate-mark::before, .gate-mark::after{
+  content:'';
+  position:absolute;
+  background: var(--good);
+  box-shadow: 0 0 8px var(--good-glow);
+}
+.gate-mark::before{ left:14%; right:14%; top:50%; height:1px; transform: translateY(-50%); }
+.gate-mark::after{  top:14%; bottom:14%; left:50%; width:1px; transform: translateX(-50%); }
+.gate-mark .gate-dot{
+  position:absolute;
+  width: 6px; height: 6px;
+  background: var(--good);
+  border-radius: 50%;
+  left: 50%; top: 50%;
+  transform: translate(-50%,-50%);
+  box-shadow: 0 0 8px var(--good-glow);
+}
+
+.gate-title{
+  font-size: 10px;
+  letter-spacing: .4em;
+  text-transform: uppercase;
+  color: var(--fg-dim);
+}
+.gate-name{
+  font-size: 38px;
+  font-weight: 200;
+  letter-spacing: .2em;
+  margin: 6px 0 22px;
+}
+.gate-sub{
+  font-size: 12px;
+  color: var(--fg-dim);
+  max-width: 320px;
+  line-height: 1.7;
+  margin-bottom: 32px;
+  letter-spacing: .03em;
+}
+.gate-btn{
+  background: var(--fg);
+  color: var(--bg);
+  border: none;
+  padding: 16px 36px;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .3em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: transform .1s, background .15s;
+}
+.gate-btn:active{ transform: scale(.97); background: var(--good); }
+.gate-error{
+  margin-top: 16px;
+  font-size: 11px;
+  color: var(--bad);
+  letter-spacing: .12em;
+  display:none;
+  max-width: 280px;
+  line-height: 1.5;
+}
+.gate-error.show{ display:block; }
+
+.gate-meta{
+  position:absolute;
+  bottom: 22px;
+  left:0;right:0;
+  text-align:center;
+  font-size: 9px;
+  letter-spacing: .3em;
+  color: var(--fg-faint);
+  text-transform: uppercase;
+}
+
+/* Calibration flash */
+@keyframes flash{
+  0%   { background: rgba(163,230,53,0); }
+  20%  { background: rgba(163,230,53,.12); }
+  100% { background: rgba(163,230,53,0); }
+}
+.flash{
+  position:absolute;
+  inset:0;
+  pointer-events:none;
+  animation: flash .55s ease-out;
+  z-index: 5;
+}
+
+/* level pulse around bubble */
+@keyframes ringPulse{
+  0%, 100% { r: 14; opacity: .4; }
+  50%      { r: 24; opacity: 0; }
+}
+.bubble-level #bubble-pulse{
+  animation: ringPulse 1.4s ease-out infinite;
+  fill: none;
+  stroke: var(--good);
+  stroke-width: 1;
+  display: inline;
+}
+#bubble-pulse{ display: none; }
+
+/* tiny decorative axis labels */
+.axis-label{
+  font-size: 8px;
+  letter-spacing: .2em;
+  fill: var(--fg-faint);
+  font-family: 'JetBrains Mono', monospace;
+}
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ── Header ─────────────────────────────────────────── -->
+  <header class="header">
+    <div class="brand" id="brand">PLUMB</div>
+    <div class="mode-pill" id="mode-pill">
+      <span class="dot"></span>
+      <span id="mode-label">STANDBY</span>
+    </div>
+    <div class="status">
+      <div class="status-item" id="status-imu">IMU</div>
+      <div class="status-item" id="status-cam">CAM</div>
+    </div>
+  </header>
+
+  <!-- ── Main viewport ──────────────────────────────────── -->
+  <main class="main" id="main">
+
+    <!-- Bubble (flat) panel -->
+    <section class="mode-panel" id="panel-flat">
+      <div class="bubble-wrap">
+        <div class="b-readout">
+          <div class="num" id="b-num">0.00°</div>
+          <div class="label">Total Deviation</div>
+        </div>
+
+        <svg class="bubble-svg" viewBox="-100 -100 200 200">
+          <defs>
+            <radialGradient id="ringFill" cx="50%" cy="50%" r="50%">
+              <stop offset="0%"  stop-color="rgba(245,245,244,0)"/>
+              <stop offset="92%" stop-color="rgba(245,245,244,.04)"/>
+              <stop offset="100%" stop-color="rgba(245,245,244,.18)"/>
+            </radialGradient>
+          </defs>
+
+          <!-- soft inner fill -->
+          <circle cx="0" cy="0" r="80" fill="url(#ringFill)"/>
+
+          <!-- crosshair through center (broken at center) -->
+          <line x1="-92" y1="0" x2="-14" y2="0" stroke="#3f3f46" stroke-width=".6"/>
+          <line x1="14"  y1="0" x2="92"  y2="0" stroke="#3f3f46" stroke-width=".6"/>
+          <line x1="0" y1="-92" x2="0" y2="-14" stroke="#3f3f46" stroke-width=".6"/>
+          <line x1="0" y1="14"  x2="0" y2="92"  stroke="#3f3f46" stroke-width=".6"/>
+
+          <!-- tick marks (every 30° azimuth, longer at cardinals) -->
+          <g id="ticks"></g>
+
+          <!-- inner reference rings -->
+          <circle cx="0" cy="0" r="16" fill="none" stroke="#27272a" stroke-width=".6" stroke-dasharray="1.5 2.5"/>
+          <circle cx="0" cy="0" r="40" fill="none" stroke="#27272a" stroke-width=".5" stroke-dasharray="1 3"/>
+
+          <!-- outer ring -->
+          <circle cx="0" cy="0" r="80" fill="none" stroke="#a1a1aa" stroke-width="1" opacity=".7"/>
+
+          <!-- axis labels -->
+          <text class="axis-label" x="0" y="-86" text-anchor="middle" dominant-baseline="auto">N</text>
+          <text class="axis-label" x="0" y="93"  text-anchor="middle" dominant-baseline="auto">S</text>
+          <text class="axis-label" x="-89" y="3" text-anchor="middle">W</text>
+          <text class="axis-label" x="89"  y="3" text-anchor="middle">E</text>
+
+          <!-- center dot -->
+          <circle cx="0" cy="0" r="1.4" fill="#52525b"/>
+
+          <!-- bubble (moving indicator) -->
+          <g id="bubble" transform="translate(0,0)">
+            <circle id="bubble-pulse" cx="0" cy="0" r="14"/>
+            <circle id="bubble-halo" cx="0" cy="0" r="14" fill="rgba(251,113,133,.10)"/>
+            <circle id="bubble-ring" cx="0" cy="0" r="9"  fill="none" stroke="#fb7185" stroke-width="1.4"/>
+            <circle id="bubble-core" cx="0" cy="0" r="2"  fill="#fb7185"/>
+          </g>
+        </svg>
+
+        <div class="b-coords">
+          <span>X<b id="cx">+0.00°</b></span>
+          <span>Y<b id="cy">+0.00°</b></span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Vertical (camera) panel -->
+    <section class="mode-panel" id="panel-vert">
+      <div class="cam-stage">
+        <video id="cam-video" autoplay playsinline muted></video>
+        <div class="cam-overlay">
+          <div class="cam-corner tl"></div>
+          <div class="cam-corner tr"></div>
+          <div class="cam-corner bl"></div>
+          <div class="cam-corner br"></div>
+          <div class="ref-cross"></div>
+          <div class="true-cross" id="true-cross"></div>
+          <div class="cam-center"></div>
+        </div>
+        <div class="cam-readout">
+          <div class="num" id="cam-num">+0.0°</div>
+          <div class="label" id="cam-grade">0.0% GRADE</div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ── Footer controls ────────────────────────────────── -->
+  <footer class="footer">
+    <button class="btn" id="btn-calibrate">
+      <svg class="icon" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="3"/>
+        <line x1="12" y1="2" x2="12" y2="6"/>
+        <line x1="12" y1="18" x2="12" y2="22"/>
+        <line x1="2" y1="12" x2="6" y2="12"/>
+        <line x1="18" y1="12" x2="22" y2="12"/>
+      </svg>
+      <span>Calibrate</span>
+    </button>
+    <button class="btn" id="btn-reset">
+      <svg class="icon" viewBox="0 0 24 24">
+        <path d="M3 12a9 9 0 1 0 3-6.7"/>
+        <polyline points="3 4 3 9 8 9"/>
+      </svg>
+      <span>Reset</span>
+    </button>
+    <button class="btn toggle" id="btn-camera">
+      <svg class="icon" viewBox="0 0 24 24">
+        <path d="M3 7h3l2-3h8l2 3h3a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1z"/>
+        <circle cx="12" cy="13" r="4"/>
+      </svg>
+      <span>Camera</span>
+    </button>
+  </footer>
+
+</div>
+
+<!-- ── Permission gate ──────────────────────────────────── -->
+<div class="gate" id="gate">
+  <div class="gate-mark"><span class="gate-dot"></span></div>
+  <div class="gate-title">Spirit Level · Precision Tool</div>
+  <div class="gate-name">PLUMB</div>
+  <div class="gate-sub">
+    Uses your phone's accelerometer for tilt and the rear camera for the
+    horizon overlay. Tap below to grant sensor access.
+  </div>
+  <button class="gate-btn" id="gate-btn">Initialize</button>
+  <div class="gate-error" id="gate-error">
+    Sensor access denied. Open this page in Safari (iOS) or Chrome (Android)
+    over HTTPS, then allow motion access.
+  </div>
+  <div class="gate-meta">v 1.0 · est. 2026</div>
+</div>
+
+<script>
+(() => {
+  'use strict';
+
+  // ─── State ──────────────────────────────────────────────
+  const S = {
+    rawAx: 0, rawAy: 0, rawAz: 0,
+    ax: 0, ay: 0, az: 0,
+    cal_ax: 0, cal_ay: 0,
+    cal_roll: 0,
+    mode: null,                 // 'flat' | 'vertical'
+    sensorOK: false,
+    cameraOn: false,
+    cameraWanted: false,        // user's preference, persists across mode switches
+    cameraStream: null,
+    initialized: false,
+    levelTolerance: 0.4,        // degrees within which we report "level"
+    wasLevel: false,
+    smoothing: 0.18,
+    orient: 0,
+  };
+
+  // ─── DOM helpers ────────────────────────────────────────
+  const $ = id => document.getElementById(id);
+  const panelFlat = $('panel-flat');
+  const panelVert = $('panel-vert');
+  const bubbleG   = $('bubble');
+  const bubbleW   = panelFlat.querySelector('.bubble-wrap');
+  const bNum      = $('b-num');
+  const cxEl      = $('cx');
+  const cyEl      = $('cy');
+  const camNum    = $('cam-num');
+  const camGrade  = $('cam-grade');
+  const trueCross = $('true-cross');
+  const camVideo  = $('cam-video');
+  const modePill  = $('mode-pill');
+  const modeLabel = $('mode-label');
+  const statusIMU = $('status-imu');
+  const statusCAM = $('status-cam');
+  const brand     = $('brand');
+  const gate      = $('gate');
+  const gateError = $('gate-error');
+  const btnCal    = $('btn-calibrate');
+  const btnRst    = $('btn-reset');
+  const btnCam    = $('btn-camera');
+
+  // ─── Generate bubble tick marks ─────────────────────────
+  const ticksG = $('ticks');
+  for (let deg = 0; deg < 360; deg += 6){
+    const r1 = 80;
+    const r2 = (deg % 30 === 0) ? 70 : 76;
+    const w  = (deg % 30 === 0) ? .9  : .55;
+    const c  = (deg % 90 === 0) ? '#a1a1aa'
+             : (deg % 30 === 0) ? '#71717a'
+             :                    '#3f3f46';
+    const rad = (deg - 90) * Math.PI / 180;
+    const x1 = r1 * Math.cos(rad), y1 = r1 * Math.sin(rad);
+    const x2 = r2 * Math.cos(rad), y2 = r2 * Math.sin(rad);
+    const ln = document.createElementNS('http://www.w3.org/2000/svg','line');
+    ln.setAttribute('x1', x1.toFixed(2));
+    ln.setAttribute('y1', y1.toFixed(2));
+    ln.setAttribute('x2', x2.toFixed(2));
+    ln.setAttribute('y2', y2.toFixed(2));
+    ln.setAttribute('stroke', c);
+    ln.setAttribute('stroke-width', w);
+    ticksG.appendChild(ln);
+  }
+
+  // ─── Orientation tracking ───────────────────────────────
+  function updateOrient(){
+    if (screen.orientation && typeof screen.orientation.angle === 'number'){
+      S.orient = screen.orientation.angle;
+    } else if (typeof window.orientation === 'number'){
+      S.orient = window.orientation;
+    } else {
+      S.orient = 0;
+    }
+  }
+  updateOrient();
+  window.addEventListener('orientationchange', updateOrient);
+  if (screen.orientation && screen.orientation.addEventListener){
+    screen.orientation.addEventListener('change', updateOrient);
+  }
+
+  // ─── Initialize (permissions + listeners) ───────────────
+  async function initialize(){
+    let ok = true;
+
+    // iOS 13+ requires explicit permission
+    try {
+      if (typeof DeviceMotionEvent !== 'undefined' &&
+          typeof DeviceMotionEvent.requestPermission === 'function'){
+        const r = await DeviceMotionEvent.requestPermission();
+        if (r !== 'granted') ok = false;
+      }
+    } catch(e){ ok = false; }
+
+    try {
+      if (typeof DeviceOrientationEvent !== 'undefined' &&
+          typeof DeviceOrientationEvent.requestPermission === 'function'){
+        await DeviceOrientationEvent.requestPermission();
+      }
+    } catch(e){ /* not fatal */ }
+
+    if (!ok){
+      gateError.classList.add('show');
+      return;
+    }
+
+    window.addEventListener('devicemotion', onMotion);
+
+    // Try wakelock so screen stays on
+    try {
+      if ('wakeLock' in navigator) await navigator.wakeLock.request('screen');
+    } catch(e){}
+
+    // Default to flat mode visually until we have data
+    setMode('flat');
+
+    S.initialized = true;
+    gate.classList.add('hidden');
+    requestAnimationFrame(loop);
+  }
+
+  function onMotion(e){
+    const a = e.accelerationIncludingGravity;
+    if (!a || (a.x === null && a.y === null && a.z === null)) return;
+
+    if (!S.sensorOK){
+      S.sensorOK = true;
+      statusIMU.classList.add('on');
+      brand.classList.add('live');
+    }
+
+    S.rawAx = a.x || 0;
+    S.rawAy = a.y || 0;
+    S.rawAz = a.z || 0;
+
+    // exponential smoothing
+    const k = S.smoothing;
+    S.ax = S.ax * (1 - k) + S.rawAx * k;
+    S.ay = S.ay * (1 - k) + S.rawAy * k;
+    S.az = S.az * (1 - k) + S.rawAz * k;
+  }
+
+  // ─── Camera ─────────────────────────────────────────────
+  async function setCamera(on){
+    if (on){
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: 'environment' } },
+          audio: false
+        });
+        S.cameraStream = stream;
+        camVideo.srcObject = stream;
+        camVideo.classList.add('on');
+        S.cameraOn = true;
+        statusCAM.classList.add('on');
+        btnCam.classList.add('on');
+      } catch(e){
+        S.cameraOn = false;
+        btnCam.classList.remove('on');
+      }
+    } else {
+      if (S.cameraStream){
+        S.cameraStream.getTracks().forEach(t => t.stop());
+        S.cameraStream = null;
+      }
+      camVideo.srcObject = null;
+      camVideo.classList.remove('on');
+      S.cameraOn = false;
+      statusCAM.classList.remove('on');
+    }
+  }
+
+  // ─── Mode detection (with hysteresis) ───────────────────
+  function detectMode(){
+    const horiz = Math.hypot(S.ax, S.ay);
+    const vert  = Math.abs(S.az);
+
+    let next = S.mode;
+    if (S.mode === 'flat' || S.mode === null){
+      if (horiz > 7.5 && vert < 4.5) next = 'vertical';
+      else if (S.mode === null)      next = 'flat';
+    } else { // vertical
+      if (vert > 7.5 && horiz < 4.5) next = 'flat';
+    }
+    if (next !== S.mode) setMode(next);
+  }
+
+  function setMode(m){
+    if (S.mode === m) return;
+    S.mode = m;
+    panelFlat.classList.toggle('active', m === 'flat');
+    panelVert.classList.toggle('active', m === 'vertical');
+    modePill.classList.toggle('flat', m === 'flat');
+    modePill.classList.toggle('vert', m === 'vertical');
+    modeLabel.textContent = m === 'flat' ? 'BUBBLE · FLAT' : 'HORIZON · VERT';
+
+    // Camera button is only meaningful in vertical mode visually
+    btnCam.classList.toggle('dim', m !== 'vertical');
+
+    // Apply user's camera preference for vertical mode
+    if (m === 'vertical' && S.cameraWanted && !S.cameraOn){
+      setCamera(true);
+    } else if (m !== 'vertical' && S.cameraOn){
+      setCamera(false);
+    }
+  }
+
+  // ─── Calibration ────────────────────────────────────────
+  function calibrate(){
+    if (S.mode === 'flat'){
+      S.cal_ax = S.ax;
+      S.cal_ay = S.ay;
+    } else if (S.mode === 'vertical'){
+      S.cal_roll = computeRollDeg(true); // use uncalibrated roll
+    }
+    flash();
+    haptic([12, 24, 12]);
+  }
+
+  function resetCalibration(){
+    S.cal_ax = 0;
+    S.cal_ay = 0;
+    S.cal_roll = 0;
+    flash();
+    haptic(8);
+  }
+
+  function flash(){
+    const f = document.createElement('div');
+    f.className = 'flash';
+    document.querySelector('.main').appendChild(f);
+    setTimeout(() => f.remove(), 600);
+  }
+
+  function haptic(p){
+    if (navigator.vibrate) navigator.vibrate(p);
+  }
+
+  // ─── Math: tilt for flat, roll for vertical ─────────────
+  // Adjust accelerometer to user-visible coords given screen orientation
+  function userFrame(ax, ay){
+    const o = S.orient;
+    const r = -o * Math.PI / 180;
+    const c = Math.cos(r), s = Math.sin(r);
+    return { x: ax * c - ay * s, y: ax * s + ay * c };
+  }
+
+  function getFlatTilt(){
+    const adjAx = S.ax - S.cal_ax;
+    const adjAy = S.ay - S.cal_ay;
+    const u = userFrame(adjAx, adjAy);
+    const azAbs = Math.max(Math.abs(S.az), 0.05);
+    const tx = Math.atan2(u.x, azAbs) * 180 / Math.PI;
+    const ty = Math.atan2(u.y, azAbs) * 180 / Math.PI;
+    return { tx, ty };
+  }
+
+  function computeRollDeg(uncalibrated = false){
+    const u = userFrame(S.ax, S.ay);
+    let roll = Math.atan2(u.x, u.y) * 180 / Math.PI;
+    if (!uncalibrated) roll -= S.cal_roll;
+    while (roll > 180)  roll -= 360;
+    while (roll < -180) roll += 360;
+    return roll;
+  }
+
+  // ─── Render loop ────────────────────────────────────────
+  function loop(){
+    if (!S.initialized) return;
+    detectMode();
+    if (S.mode === 'flat') renderFlat();
+    else                   renderVertical();
+    requestAnimationFrame(loop);
+  }
+
+  function renderFlat(){
+    const { tx, ty } = getFlatTilt();
+    const total = Math.hypot(tx, ty);
+    const isLevel = total < S.levelTolerance;
+
+    // Map degrees → SVG units. 8 units per degree → outer ring at 10°.
+    const scale = 8;
+    let bx = tx * scale;
+    let by = -ty * scale;
+    const r = Math.hypot(bx, by);
+    const maxR = 76;
+    if (r > maxR){
+      bx = bx * maxR / r;
+      by = by * maxR / r;
+    }
+    bubbleG.setAttribute('transform', `translate(${bx.toFixed(2)},${by.toFixed(2)})`);
+    bubbleW.classList.toggle('bubble-level', isLevel);
+
+    bNum.textContent = total.toFixed(2) + '°';
+    bNum.classList.toggle('level', isLevel);
+    cxEl.textContent = (tx >= 0 ? '+' : '') + tx.toFixed(2) + '°';
+    cyEl.textContent = (ty >= 0 ? '+' : '') + ty.toFixed(2) + '°';
+
+    handleLevelHaptic(isLevel);
+  }
+
+  function renderVertical(){
+    const roll = computeRollDeg();
+    const isLevel = Math.abs(roll) < S.levelTolerance;
+    trueCross.style.setProperty('--roll', (-roll).toFixed(2) + 'deg');
+    trueCross.classList.toggle('aligned', isLevel);
+
+    camNum.textContent = (roll >= 0 ? '+' : '') + roll.toFixed(1) + '°';
+    camNum.classList.toggle('level', isLevel);
+    const grade = Math.tan(roll * Math.PI / 180) * 100;
+    const gAbs = Math.min(Math.abs(grade), 999);
+    camGrade.textContent = gAbs.toFixed(1) + '% GRADE';
+
+    handleLevelHaptic(isLevel);
+  }
+
+  function handleLevelHaptic(isLevel){
+    if (isLevel && !S.wasLevel) haptic(18);
+    S.wasLevel = isLevel;
+  }
+
+  // ─── Event handlers ─────────────────────────────────────
+  $('gate-btn').addEventListener('click', initialize);
+
+  btnCal.addEventListener('click', () => {
+    if (!S.initialized) return;
+    calibrate();
+  });
+
+  btnRst.addEventListener('click', () => {
+    if (!S.initialized) return;
+    resetCalibration();
+  });
+
+  btnCam.addEventListener('click', () => {
+    if (!S.initialized) return;
+    S.cameraWanted = !S.cameraWanted;
+    btnCam.classList.toggle('on', S.cameraWanted);
+    if (S.mode === 'vertical'){
+      setCamera(S.cameraWanted);
+    } else {
+      // Just flip preference; camera will activate when entering vertical mode
+      haptic(6);
+    }
+  });
+
+  // Pause camera when tab hidden, resume when visible
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden && S.cameraOn) setCamera(false);
+    else if (!document.hidden && S.cameraWanted && S.mode === 'vertical' && !S.cameraOn){
+      setCamera(true);
+    }
+  });
+
+  // Block page-level zoom/scroll
+  document.addEventListener('touchmove', e => {
+    if (e.touches.length > 1) e.preventDefault();
+  }, { passive: false });
+  document.addEventListener('gesturestart', e => e.preventDefault());
+
+})();
+</script>
+</body>
+</html>
